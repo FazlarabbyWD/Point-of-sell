@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Helper\JWTToken;
+use App\Mail\OTPMail;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Exception;
+use Illuminate\Support\Facades\Mail;
+use Mockery\Expectation;
 
 class UserController extends Controller
 {
@@ -53,14 +56,73 @@ class UserController extends Controller
             ]);
         }
     }
-    function SendOTPToEmail()
+    function SendOTPToEmail(Request $request)
     {
+        $email = $request->input('email');
+        $otp = rand(1000, 9999);
+
+        $count = User::where('email', '=', $email)->count();
+        if ($count == 1) {
+            Mail::to($email)->send(new OTPMail($otp));
+
+            User::where('email', '=', $email)->update(['otp' => $otp]);
+            return response()->json([
+                'status' => 'Success',
+                'message' => 'OTP Code Send'
+
+            ]);
+        } else {
+            return response()->json([
+                'status' => 'Failed',
+                'message' => 'Unauthorized'
+
+            ]);
+        }
     }
-    function OTPVerify()
+    function OTPVerify(Request $request)
     {
+        $email = $request->input('email');
+        $otp = $request->input('otp');
+        $count = User::where('email', '=', $email)
+            ->where('otp', '=', $otp)->count();
+
+        if ($count == 1) {
+
+            User::where('email', '=', $email)->update(['otp' => '0']);
+
+            $token = JWTToken::CreateTokenForSetPassword($request->input('email'));
+            return response()->json([
+                'status' => 'Authorized',
+                'message' => 'OTP Verify Successfull',
+                'token' => $token
+            ]);
+        } else {
+            return response()->json([
+                'status' => 'Failed',
+                'message' => 'Unauthorized'
+
+            ]);
+        }
     }
-    function SetPassword()
+    function ResetPassword(Request $request)
     {
+        try {
+            $email = $request->header('email');
+            $password = $request->input('password');
+
+            User::where('email', '=', $email)->update(['password' => $password]);
+            return response()->json([
+                'status' => 'Success',
+                'message' => 'Request Successfull'
+
+            ]);
+        } catch (Expectation $e) {
+
+            return response()->json([
+                'status' => 'Failed',
+                'message' => 'Something went Wrong',
+            ]);
+        }
     }
     function ProfileUpdate()
     {
